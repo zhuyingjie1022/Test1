@@ -19,8 +19,16 @@
             <span class="status-dot" aria-hidden="true"></span>
             <p class="eyebrow">Live SFO forecast</p>
           </div>
-          <h1 id="app-title">Highest Temperature Finder</h1>
-          <p class="location-line">San Francisco International Airport (SFO)</p>
+          <h1 id="app-title">SFO Heat Finder</h1>
+          <p class="location-line" id="hero-weather-line">
+            San Francisco International Airport (SFO)
+          </p>
+          <div class="station-strip" aria-label="Station details">
+            <span>KSFO</span>
+            <span>37.6213 N</span>
+            <span>122.379 W</span>
+            <span>Pacific time</span>
+          </div>
         </div>
 
         <form class="controls" id="weather-form">
@@ -52,13 +60,39 @@
             <p class="metric-label">Highest forecast temperature</p>
             <p class="peak-temperature" id="peak-temperature">--</p>
             <p class="metric-detail" id="peak-detail">Loading forecast...</p>
+            <div class="metric-pill" id="peak-delta">Calculating trend</div>
           </div>
 
           <div class="result-card current-card">
             <p class="metric-label">Current SFO temperature</p>
             <p class="current-temperature" id="current-temperature">--</p>
             <p class="metric-detail" id="updated-at">Waiting for weather data</p>
+            <dl class="mini-stats">
+              <div>
+                <dt>Wind</dt>
+                <dd id="current-wind">--</dd>
+              </div>
+              <div>
+                <dt>Sky</dt>
+                <dd id="current-condition">--</dd>
+              </div>
+            </dl>
           </div>
+        </section>
+
+        <section class="insight-row" aria-label="Forecast summary">
+          <article>
+            <span>Average high</span>
+            <strong id="average-high">--</strong>
+          </article>
+          <article>
+            <span>Coolest high</span>
+            <strong id="coolest-high">--</strong>
+          </article>
+          <article>
+            <span>Peak hour</span>
+            <strong id="peak-hour-stat">--</strong>
+          </article>
         </section>
 
         <section class="forecast-section" aria-labelledby="daily-heading">
@@ -71,13 +105,23 @@
       </section>
 
       <aside class="visual-panel" aria-label="SFO weather visualization">
-        <img src="assets/sfo-weather.svg" alt="Illustration of SFO runway weather">
+        <figure class="image-frame">
+          <img src="assets/sfo-weather.svg" alt="Illustration of SFO runway weather">
+          <figcaption id="source-line">Open-Meteo forecast for SFO airport coordinates</figcaption>
+        </figure>
         <section class="hourly-card" aria-labelledby="hourly-heading">
           <div class="section-heading">
             <h2 id="hourly-heading">Peak Day Hourly Trace</h2>
             <span id="hourly-date">--</span>
           </div>
+          <p class="chart-note" id="chart-note">Waiting for peak-day hourly readings</p>
           <div class="hourly-chart" id="hourly-chart"></div>
+          <div class="hourly-axis" aria-hidden="true">
+            <span>12 AM</span>
+            <span>6 AM</span>
+            <span>12 PM</span>
+            <span>6 PM</span>
+          </div>
         </section>
       </aside>
     </main>

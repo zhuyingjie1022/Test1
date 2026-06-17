@@ -11,6 +11,28 @@ const state = {
   loading: false,
 };
 
+const weatherDescriptions = {
+  0: "Clear",
+  1: "Mostly clear",
+  2: "Partly cloudy",
+  3: "Cloudy",
+  45: "Fog",
+  48: "Rime fog",
+  51: "Light drizzle",
+  53: "Drizzle",
+  55: "Heavy drizzle",
+  61: "Light rain",
+  63: "Rain",
+  65: "Heavy rain",
+  71: "Light snow",
+  73: "Snow",
+  75: "Heavy snow",
+  80: "Rain showers",
+  81: "Rain showers",
+  82: "Heavy showers",
+  95: "Thunderstorm",
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("#weather-form");
   const rangeSelect = document.querySelector("#forecast-range");
@@ -52,10 +74,11 @@ async function fetchForecast(days) {
     longitude: SFO.longitude,
     timezone: SFO.timezone,
     temperature_unit: "fahrenheit",
+    wind_speed_unit: "mph",
     forecast_days: String(days),
-    current: "temperature_2m",
-    daily: "temperature_2m_max",
-    hourly: "temperature_2m",
+    current: "temperature_2m,wind_speed_10m,weather_code",
+    daily: "temperature_2m_max,temperature_2m_min",
+    hourly: "temperature_2m,apparent_temperature",
   });
 
   const response = await fetch(url);
@@ -70,7 +93,8 @@ async function fetchForecast(days) {
 function summarizeForecast(data) {
   const daily = data.daily?.time?.map((date, index) => ({
     date,
-    temperature: data.daily.temperature_2m_max[index],
+    high: data.daily.temperature_2m_max[index],
+    low: data.daily.temperature_2m_min[index],
   }));
 
   const hourly = data.hourly?.time?.map((time, index) => ({
@@ -78,6 +102,7 @@ function summarizeForecast(data) {
     date: time.slice(0, 10),
     hour: Number(time.slice(11, 13)),
     temperature: data.hourly.temperature_2m[index],
+    apparent: data.hourly.apparent_temperature?.[index],
   }));
 
   if (!daily?.length || !hourly?.length) {
@@ -85,19 +110,28 @@ function summarizeForecast(data) {
   }
 
   const peakDay = daily.reduce((highest, entry) =>
-    entry.temperature > highest.temperature ? entry : highest
+    entry.high > highest.high ? entry : highest
   );
 
   const peakDayHours = hourly.filter((entry) => entry.date === peakDay.date);
   const peakHour = peakDayHours.reduce((highest, entry) =>
     entry.temperature > highest.temperature ? entry : highest
   );
+  const averageHigh =
+    daily.reduce((total, entry) => total + entry.high, 0) / daily.length;
+  const coolestDay = daily.reduce((coolest, entry) =>
+    entry.high < coolest.high ? entry : coolest
+  );
 
   return {
     current: data.current?.temperature_2m,
     currentTime: data.current?.time,
+    currentWind: data.current?.wind_speed_10m,
+    currentWeatherCode: data.current?.weather_code,
     daily,
     hourly: peakDayHours,
+    averageHigh,
+    coolestDay,
     peakDay,
     peakHour,
   };
@@ -105,20 +139,41 @@ function summarizeForecast(data) {
 
 function renderForecast(summary) {
   document.querySelector("#peak-temperature").textContent = formatTemperature(
-    summary.peakDay.temperature
+    summary.peakDay.high
   );
   document.querySelector("#peak-detail").textContent =
-    `${formatFullDate(summary.peakDay.date)} near ${formatHour(summary.peakHour.hour)}.`;
+    `${formatFullDate(summary.peakDay.date)} near ${formatHour(summary.peakHour.hour)}, with a low around ${formatTemperature(summary.peakDay.low)}.`;
   document.querySelector("#current-temperature").textContent =
     summary.current === undefined ? "--" : formatTemperature(summary.current);
   document.querySelector("#updated-at").textContent =
     summary.currentTime === undefined
       ? "Current reading unavailable"
       : `Updated ${formatDateTime(summary.currentTime)}`;
+  document.querySelector("#current-wind").textContent =
+    summary.currentWind === undefined ? "--" : `${Math.round(summary.currentWind)} mph`;
+  document.querySelector("#current-condition").textContent =
+    weatherDescriptions[summary.currentWeatherCode] || "Forecast";
+  document.querySelector("#average-high").textContent = formatTemperature(
+    summary.averageHigh
+  );
+  document.querySelector("#coolest-high").textContent =
+    `${formatTemperature(summary.coolestDay.high)} ${formatWeekday(summary.coolestDay.date)}`;
+  document.querySelector("#peak-hour-stat").textContent =
+    `${formatHour(summary.peakHour.hour)} ${formatTemperature(summary.peakHour.temperature)}`;
+  document.querySelector("#peak-delta").textContent = formatPeakDelta(
+    summary.peakDay.high,
+    summary.averageHigh
+  );
   document.querySelector("#daily-range").textContent =
     `${summary.daily.length} day forecast`;
   document.querySelector("#hourly-date").textContent =
     formatFullDate(summary.peakDay.date);
+  document.querySelector("#chart-note").textContent =
+    `${formatTemperature(summary.peakHour.temperature)} peak reading; feels like ${formatTemperature(summary.peakHour.apparent ?? summary.peakHour.temperature)}.`;
+  document.querySelector("#hero-weather-line").textContent =
+    `SFO is ${formatTemperature(summary.current ?? summary.peakHour.temperature)} now. Peak forecast: ${formatTemperature(summary.peakDay.high)}.`;
+  document.querySelector("#source-line").textContent =
+    `Open-Meteo updated ${formatDateTime(summary.currentTime || summary.peakHour.time)} for SFO coordinates`;
 
   renderDailyList(summary.daily, summary.peakDay.date);
   renderHourlyChart(summary.hourly, summary.peakHour.time);
@@ -127,10 +182,19 @@ function renderForecast(summary) {
 function renderDailyList(days, peakDate) {
   const list = document.querySelector("#daily-list");
   list.replaceChildren();
+  const minHigh = Math.min(...days.map((day) => day.high));
+  const maxHigh = Math.max(...days.map((day) => day.high));
+  const range = Math.max(maxHigh - minHigh, 1);
 
   days.forEach((day) => {
     const article = document.createElement("article");
     article.className = `day-card${day.date === peakDate ? " is-peak" : ""}`;
+    const heatFill = 18 + Math.round(((day.high - minHigh) / range) * 38);
+    article.style.setProperty("--heat-fill", `${heatFill}%`);
+    article.setAttribute(
+      "aria-label",
+      `${formatWeekday(day.date)} high ${formatTemperature(day.high)}, low ${formatTemperature(day.low)}`
+    );
 
     const name = document.createElement("p");
     name.className = "day-name";
@@ -140,11 +204,19 @@ function renderDailyList(days, peakDate) {
     date.className = "day-date";
     date.textContent = formatShortDate(day.date);
 
-    const temp = document.createElement("p");
-    temp.className = "day-temp";
-    temp.textContent = formatTemperature(day.temperature);
+    const temps = document.createElement("div");
+    temps.className = "day-temps";
 
-    article.append(name, date, temp);
+    const high = document.createElement("p");
+    high.className = "day-temp";
+    high.textContent = formatTemperature(day.high);
+
+    const low = document.createElement("p");
+    low.className = "day-low";
+    low.textContent = `Low ${formatTemperature(day.low)}`;
+
+    temps.append(high, low);
+    article.append(name, date, temps);
     list.append(article);
   });
 }
@@ -183,10 +255,26 @@ function showError(error) {
   errorBox.hidden = false;
   document.querySelector("#peak-detail").textContent =
     "Forecast unavailable right now.";
+  document.querySelector("#hero-weather-line").textContent =
+    "San Francisco International Airport (SFO)";
 }
 
 function formatTemperature(value) {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return "--";
+  }
+
   return `${Math.round(value)}${tempUnit}`;
+}
+
+function formatPeakDelta(peakHigh, averageHigh) {
+  const delta = Math.round(peakHigh - averageHigh);
+
+  if (delta === 0) {
+    return "Matches the forecast average high";
+  }
+
+  return `${Math.abs(delta)}${tempUnit} ${delta > 0 ? "above" : "below"} the forecast average high`;
 }
 
 function formatFullDate(dateString) {
